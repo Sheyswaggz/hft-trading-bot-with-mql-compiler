@@ -1,26 +1,29 @@
 """Database session management."""
 
+import logging
 from typing import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
 
-# Create database engine
+logger = logging.getLogger(__name__)
+
+# Create database engine with connection pooling
 engine = create_engine(
     settings.DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.DATABASE_URL else {},
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
+    echo=settings.DEBUG,
 )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator:
     """Get database session.
 
     Yields:
