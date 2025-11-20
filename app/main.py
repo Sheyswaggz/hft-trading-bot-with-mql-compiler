@@ -1,114 +1,93 @@
-"""Main FastAPI application entry point.
+"""Main FastAPI application module.
 
-This module initializes the FastAPI application with middleware, routers,
-and lifecycle management for the HFT Trading Bot API.
+This module initializes the FastAPI application with all necessary configurations,
+middleware, and route handlers for the HFT trading bot.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from app.api import health
-from app.config import get_settings
-from app.core.logging import get_logger, setup_logging
-from app.db.session import close_db, init_db
+from app.api.health import router as health_router
+from app.config import settings
+from app.core.logging import setup_logging
+from app.db.session import engine
+from app.db.base import Base
+
+# Setup logging
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage application lifecycle events.
+    """Application lifespan manager.
 
-    Handles startup and shutdown tasks including logging configuration
-    and resource cleanup.
-
-    Args:
-        app: FastAPI application instance
-
-    Yields:
-        None: Control to the application during its lifetime
+    Handles startup and shutdown events for the FastAPI application.
     """
-    settings = get_settings()
-
-    # Startup: Configure logging infrastructure
-    setup_logging(log_level=settings.LOG_LEVEL)
-    logger = get_logger(__name__)
-
-    logger.info(
-        "Application starting",
-        extra={
-            "app_name": settings.APP_NAME,
-            "version": settings.VERSION,
-            "debug": settings.DEBUG,
-            "log_level": settings.LOG_LEVEL,
-        },
-    )
-
-    await init_db()
-    logger.info("Database initialized")
+    # Startup
+    logger.info("Starting up HFT Trading Bot API...")
+    try:
+        # Create database tables
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create database tables: {e}")
+        raise
 
     yield
 
-    # Shutdown: Log graceful shutdown
-    await close_db()
-    logger.info("Database connections closed")
-    logger.info(
-        "Application shutting down",
-        extra={
-            "app_name": settings.APP_NAME,
-            "version": settings.VERSION,
-        },
-    )
+    # Shutdown
+    logger.info("Shutting down HFT Trading Bot API...")
+    await engine.dispose()
 
 
 # Initialize FastAPI application
-settings = get_settings()
-
 app = FastAPI(
-    title=settings.APP_NAME,
+    title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="High-Frequency Trading Bot with MQL Compiler",
-    docs_url="/docs",
-    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-# Configure CORS middleware for frontend access
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(health.router)
+app.include_router(health_router, prefix="/api/v1", tags=["health"])
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    """Root endpoint providing API information.
-
-    Returns basic information about the API including version and
-    documentation links.
-
-    Returns:
-        dict: API metadata with name, version, and documentation URL
-    """
-    return {
-        "message": "HFT Trading Bot API",
-        "version": settings.VERSION,
-        "docs": "/docs",
-    }
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler for unhandled exceptions."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "error": str(exc) if settings.DEBUG else "An error occurred",
+        },
+    )
 
 
 if __name__ == "__main__":
+    import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=settings.DEBUG,
+        log_level="info",
     )
