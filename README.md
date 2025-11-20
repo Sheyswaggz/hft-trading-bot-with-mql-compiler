@@ -49,3 +49,80 @@ Deploy the HFT Trading Bot to Kubernetes clusters with production-ready configur
 - **NGINX Ingress Controller** (for external access and rate limiting)
 
 Verify your cluster access:
+
+## CI/CD Pipeline
+
+The project uses GitHub Actions for automated testing, security scanning, and deployment to Kubernetes environments. The CI/CD pipeline ensures code quality, security compliance, and reliable deployments across development, staging, and production environments.
+
+### Overview
+
+The CI/CD pipeline consists of two main workflows:
+
+- **CI Workflow** (`.github/workflows/ci.yml`): Runs automated tests, code quality checks, and security scans on every pull request
+- **Deploy Workflow** (`.github/workflows/deploy.yml`): Builds Docker images and deploys to Kubernetes clusters when code is merged to main
+
+### CI Workflow
+
+The CI workflow runs automatically on pull requests and includes:
+
+**Testing:**
+- Runs pytest with coverage reporting
+- Uploads coverage reports to Codecov
+- Requires minimum test coverage thresholds
+
+**Code Quality:**
+- Black formatting checks
+- Ruff linting for code quality
+- Mypy static type checking
+
+**Security Scanning:**
+- pip-audit for dependency vulnerability scanning
+- Trivy filesystem scanning for security issues
+- Results uploaded to GitHub Security tab
+
+All CI checks must pass before a pull request can be merged to the main branch.
+
+### Deployment Workflow
+
+The deployment workflow triggers automatically when code is merged to main and follows a progressive deployment strategy:
+
+**Build Stage:**
+- Builds Docker image with multi-stage optimization
+- Pushes image to GitHub Container Registry (ghcr.io)
+- Tags image with commit SHA and branch name
+- Uses layer caching for faster builds
+
+**Development Deployment:**
+- Automatically deploys to development environment
+- Updates Kubernetes deployment with new image
+- Waits for rollout completion (10 minute timeout)
+- Verifies health endpoint availability
+- Automatically rolls back on failure
+
+**Staging Deployment:**
+- Deploys after successful development deployment
+- Requires manual approval in GitHub UI
+- Performs extended health checks
+- Sends Slack notifications on success/failure
+
+**Production Deployment:**
+- Deploys after successful staging deployment
+- Requires manual approval with additional reviewers
+- Includes 2-minute monitoring period
+- Runs extended health checks (10 iterations)
+- Creates GitHub release on success
+- Automatically rolls back on any failure
+
+### Required Secrets
+
+Configure the following secrets in your GitHub repository settings (Settings → Secrets and variables → Actions):
+
+**Kubernetes Configuration:**
+- `KUBE_CONFIG_DEV`: Base64-encoded kubeconfig for development cluster
+- `KUBE_CONFIG_STAGING`: Base64-encoded kubeconfig for staging cluster
+- `KUBE_CONFIG_PROD`: Base64-encoded kubeconfig for production cluster
+
+**Notifications:**
+- `SLACK_WEBHOOK`: Slack webhook URL for deployment notifications
+
+To encode your kubeconfig:
