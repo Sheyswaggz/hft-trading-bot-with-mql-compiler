@@ -126,3 +126,34 @@ Configure the following secrets in your GitHub repository settings (Settings →
 - `SLACK_WEBHOOK`: Slack webhook URL for deployment notifications
 
 To encode your kubeconfig:
+
+## API Documentation
+
+The HFT Trading Bot provides a comprehensive REST API built with FastAPI, offering automatic OpenAPI documentation, real-time health monitoring, and extensible endpoints for trading operations.
+
+### API Overview
+
+The API is built on **FastAPI**, a modern, high-performance web framework that provides:
+
+- **Automatic OpenAPI Documentation**: Interactive API documentation at `/docs` (Swagger UI) and `/redoc` (ReDoc)
+- **Type Safety**: Request/response validation using Pydantic models
+- **Async Support**: High-performance async operations for concurrent request handling
+- **WebSocket Support**: Real-time data streaming for market updates and trading signals
+- **CORS Enabled**: Configured for frontend access with customizable origins
+
+### Running the API
+
+**Local Development with Uvicorn:**
+
+## Database Setup
+
+The HFT Trading Bot uses PostgreSQL for persistent storage of trading data, with SQLAlchemy 2.0 for async database operations and Alembic for schema migrations.
+
+### Database Requirements
+
+**PostgreSQL Version:**
+- **PostgreSQL 15+** recommended for optimal performance and features
+- Supports JSONB columns for flexible metadata storage
+- Requires `uuid-ossp` extension for UUID generation
+
+**Connection String Format:**
