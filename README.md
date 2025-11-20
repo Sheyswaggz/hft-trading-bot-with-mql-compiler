@@ -25,3 +25,13 @@ Before setting up the project, ensure you have the following installed:
 ## Setup Instructions
 
 ### 1. Clone the Repository
+
+## Code Quality
+
+This project uses automated code quality tools to maintain consistent code style and catch issues early. All tools are configured in `pyproject.toml` and run automatically via pre-commit hooks.
+
+### Formatting with Black
+
+Black is used for automatic code formatting with a line length of 100 characters.
+
+**Format all files:**
