@@ -8,6 +8,9 @@ fastapi==0.104.1
 # Includes performance optimizations for production workloads
 uvicorn[standard]==0.24.0.post1
 
+# Production ASGI server for running FastAPI with multiple workers
+gunicorn==21.2.0
+
 # Data Validation - Pydantic 2.5.2 for type-safe data models and validation
 # Version 2.x provides significant performance improvements over v1
 pydantic==2.5.2

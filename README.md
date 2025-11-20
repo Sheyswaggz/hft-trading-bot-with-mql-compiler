@@ -26,12 +26,13 @@ Before setting up the project, ensure you have the following installed:
 
 ### 1. Clone the Repository
 
-## Code Quality
+## Docker Setup
 
-This project uses automated code quality tools to maintain consistent code style and catch issues early. All tools are configured in `pyproject.toml` and run automatically via pre-commit hooks.
+Docker provides a consistent and isolated environment for running the HFT Trading Bot across all platforms. This section covers building, running, and managing the application using Docker.
 
-### Formatting with Black
+### Prerequisites
 
-Black is used for automatic code formatting with a line length of 100 characters.
+- **Docker 20.10+** (Docker Engine or Docker Desktop)
+- **Docker Compose 2.0+** (included with Docker Desktop)
 
-**Format all files:**
+Verify your installation:
