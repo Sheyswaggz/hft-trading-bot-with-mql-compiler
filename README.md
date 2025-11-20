@@ -36,3 +36,16 @@ Docker provides a consistent and isolated environment for running the HFT Tradin
 - **Docker Compose 2.0+** (included with Docker Desktop)
 
 Verify your installation:
+
+## Kubernetes Deployment
+
+Deploy the HFT Trading Bot to Kubernetes clusters with production-ready configurations including auto-scaling, high availability, and zero-downtime updates.
+
+### Prerequisites
+
+- **kubectl 1.24+** (Kubernetes command-line tool)
+- **Access to a Kubernetes cluster** (GKE, EKS, AKS, or self-managed)
+- **cert-manager** (for automatic TLS certificate management)
+- **NGINX Ingress Controller** (for external access and rate limiting)
+
+Verify your cluster access:
