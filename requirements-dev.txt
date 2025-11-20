@@ -1,0 +1,40 @@
+# Development Dependencies - Pinned versions for consistent development environments
+# Inherits production dependencies from requirements.txt
+
+-r requirements.txt
+
+# Testing Framework - Pytest 7.4.3 for comprehensive test suite execution
+# Industry standard for Python testing with rich plugin ecosystem
+pytest==7.4.3
+
+# Async Testing - Pytest Asyncio 0.21.1 for testing async/await code
+# Essential for testing FastAPI endpoints and async database operations
+pytest-asyncio==0.21.1
+
+# Code Coverage - Pytest Cov 4.1.0 for measuring test coverage
+# Integrates with pytest to generate coverage reports in multiple formats
+pytest-cov==4.1.0
+
+# Code Formatter - Black 23.11.0 for consistent code formatting
+# Opinionated formatter that eliminates style debates and ensures consistency
+black==23.11.0
+
+# Linter - Ruff 0.1.7 for fast Python linting and code quality checks
+# Replaces flake8, isort, and other tools with significantly faster performance
+ruff==0.1.7
+
+# Type Checker - Mypy 1.7.1 for static type checking
+# Catches type errors before runtime and improves code documentation
+mypy==1.7.1
+
+# Git Hooks - Pre-commit 3.5.0 for automated code quality checks
+# Runs formatters and linters before commits to maintain code quality
+pre-commit==3.5.0
+
+# HTTP Client - HTTPX 0.25.2 for testing FastAPI endpoints
+# Modern async HTTP client with excellent test support for FastAPI applications
+httpx==0.25.2
+
+# Test Data - Faker 20.1.0 for generating realistic test data
+# Creates fake data for testing database models, API payloads, and edge cases
+faker==20.1.0
