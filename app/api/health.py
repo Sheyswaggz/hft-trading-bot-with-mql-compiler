@@ -7,11 +7,14 @@ to determine application health and readiness to serve traffic.
 import logging
 from datetime import datetime, timezone
 
-import psycopg2
 import redis
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.redis_client import ping_redis
 from app.config import get_settings
+from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -40,11 +43,16 @@ async def health_check() -> dict[str, str]:
 
 
 @router.get("/ready", status_code=status.HTTP_200_OK)
-async def readiness_check() -> dict[str, dict[str, str] | str]:
+async def readiness_check(
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, dict[str, str] | str]:
     """Readiness probe endpoint.
 
     Validates connectivity to critical dependencies (Redis and PostgreSQL).
     Returns 200 OK only when all services are accessible and operational.
+
+    Args:
+        db: Database session from dependency injection
 
     Returns:
         dict: Readiness status with service health details
@@ -62,45 +70,21 @@ async def readiness_check() -> dict[str, dict[str, str] | str]:
     errors: list[str] = []
 
     # Check Redis connectivity
-    try:
-        redis_client = redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        redis_client.ping()
+    redis_ok = await ping_redis()
+    if redis_ok:
         services["redis"] = "ok"
         logger.debug("Redis health check passed")
-    except redis.RedisError as e:
-        services["redis"] = "unavailable"
-        error_msg = f"Redis connection failed: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
-    except Exception as e:
+    else:
         services["redis"] = "error"
-        error_msg = f"Redis health check error: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
-    finally:
-        try:
-            redis_client.close()
-        except Exception:
-            pass
+        error_msg = "Redis connection failed"
+        logger.warning(error_msg)
 
     # Check PostgreSQL connectivity
     try:
-        conn = psycopg2.connect(
-            settings.DATABASE_URL,
-            connect_timeout=2,
-        )
-        cursor = conn.cursor()
-        cursor.execute("SELECT 1")
-        result = cursor.fetchone()
-        cursor.close()
-        conn.close()
+        result = await db.execute(select(1))
+        row = result.scalar_one()
 
-        if result and result[0] == 1:
+        if row == 1:
             services["database"] = "ok"
             logger.debug("Database health check passed")
         else:
@@ -108,14 +92,9 @@ async def readiness_check() -> dict[str, dict[str, str] | str]:
             error_msg = "Database query returned unexpected result"
             errors.append(error_msg)
             logger.error(error_msg)
-    except psycopg2.OperationalError as e:
+    except Exception as e:
         services["database"] = "unavailable"
         error_msg = f"Database connection failed: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
-    except Exception as e:
-        services["database"] = "error"
-        error_msg = f"Database health check error: {e!s}"
         errors.append(error_msg)
         logger.error(error_msg, exc_info=True)
 
