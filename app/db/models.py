@@ -1,12 +1,4 @@
-"""SQLAlchemy database models for trading bot.
-
-This module defines the database models for:
-- Market data (OHLCV)
-- Orders
-- Positions
-- Trades
-- Strategies
-"""
+"""Database models for the HFT trading bot."""
 
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -14,18 +6,16 @@ from enum import Enum as PyEnum
 from typing import Optional
 
 from sqlalchemy import (
-    Column,
+    DECIMAL,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
     Integer,
     String,
-    Numeric,
-    DateTime,
-    Boolean,
-    ForeignKey,
-    Enum,
-    JSON,
-    Index,
+    Text,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -39,7 +29,7 @@ class OrderType(str, PyEnum):
     STOP_LIMIT = "stop_limit"
 
 
-class OrderSide(str, PyEnum):
+class Side(str, PyEnum):
     """Order side enumeration."""
 
     BUY = "buy"
@@ -50,192 +40,173 @@ class OrderStatus(str, PyEnum):
     """Order status enumeration."""
 
     PENDING = "pending"
+    OPEN = "open"
     FILLED = "filled"
     PARTIALLY_FILLED = "partially_filled"
     CANCELLED = "cancelled"
     REJECTED = "rejected"
 
 
-class PositionSide(str, PyEnum):
-    """Position side enumeration."""
-
-    LONG = "long"
-    SHORT = "short"
-
-
 class MarketData(Base):
-    """Market data model for OHLCV data."""
+    """Market data model for storing OHLCV and tick data."""
 
     __tablename__ = "market_data"
 
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    timeframe = Column(String(10), nullable=False)
-    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
-    open = Column(Numeric(precision=20, scale=8), nullable=False)
-    high = Column(Numeric(precision=20, scale=8), nullable=False)
-    low = Column(Numeric(precision=20, scale=8), nullable=False)
-    close = Column(Numeric(precision=20, scale=8), nullable=False)
-    volume = Column(Numeric(precision=20, scale=8), nullable=False)
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
     )
-
-    __table_args__ = (
-        Index("idx_market_data_symbol_timeframe", "symbol", "timeframe"),
-        Index(
-            "idx_market_data_symbol_timestamp",
-            "symbol",
-            "timestamp",
-        ),
+    open: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    high: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    low: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    close: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    volume: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    bid: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(20, 8), nullable=True)
+    ask: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(20, 8), nullable=True)
+    spread: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(20, 8), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
 
 class Order(Base):
-    """Order model for trading orders."""
+    """Order model for tracking trading orders."""
 
     __tablename__ = "orders"
 
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    order_type = Column(Enum(OrderType), nullable=False)
-    side = Column(Enum(OrderSide), nullable=False)
-    quantity = Column(Numeric(precision=20, scale=8), nullable=False)
-    price = Column(Numeric(precision=20, scale=8), nullable=True)
-    stop_price = Column(Numeric(precision=20, scale=8), nullable=True)
-    status = Column(Enum(OrderStatus), nullable=False, index=True)
-    filled_quantity = Column(
-        Numeric(precision=20, scale=8), default=Decimal("0")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    strategy_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("strategies.id"), nullable=True
     )
-    average_fill_price = Column(Numeric(precision=20, scale=8), nullable=True)
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)
-    strategy_id = Column(Integer, ForeignKey("strategies.id"), nullable=True)
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    order_type: Mapped[OrderType] = mapped_column(
+        Enum(OrderType), nullable=False, default=OrderType.MARKET
     )
-    updated_at = Column(
+    side: Mapped[Side] = mapped_column(Enum(Side), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    price: Mapped[Optional[Decimal]] = mapped_column(DECIMAL(20, 8), nullable=True)
+    stop_price: Mapped[Optional[Decimal]] = mapped_column(
+        DECIMAL(20, 8), nullable=True
+    )
+    status: Mapped[OrderStatus] = mapped_column(
+        Enum(OrderStatus), nullable=False, default=OrderStatus.PENDING
+    )
+    filled_quantity: Mapped[Decimal] = mapped_column(
+        DECIMAL(20, 8), nullable=False, default=Decimal("0")
+    )
+    average_fill_price: Mapped[Optional[Decimal]] = mapped_column(
+        DECIMAL(20, 8), nullable=True
+    )
+    exchange_order_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
     )
 
     # Relationships
-    position = relationship("Position", back_populates="orders")
-    strategy = relationship("Strategy", back_populates="orders")
-
-    __table_args__ = (
-        Index("idx_orders_symbol_status", "symbol", "status"),
-        Index("idx_orders_created_at", "created_at"),
+    strategy: Mapped[Optional["Strategy"]] = relationship(
+        "Strategy", back_populates="orders"
     )
+    trades: Mapped[list["Trade"]] = relationship("Trade", back_populates="order")
 
 
 class Position(Base):
-    """Position model for open trading positions."""
+    """Position model for tracking open positions."""
 
     __tablename__ = "positions"
 
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    side = Column(Enum(PositionSide), nullable=False)
-    quantity = Column(Numeric(precision=20, scale=8), nullable=False)
-    entry_price = Column(Numeric(precision=20, scale=8), nullable=False)
-    current_price = Column(Numeric(precision=20, scale=8), nullable=False)
-    unrealized_pnl = Column(
-        Numeric(precision=20, scale=8),
-        default=Decimal("0"),
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    strategy_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("strategies.id"), nullable=True
     )
-    realized_pnl = Column(
-        Numeric(precision=20, scale=8),
-        default=Decimal("0"),
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    side: Mapped[Side] = mapped_column(Enum(Side), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    entry_price: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    current_price: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    unrealized_pnl: Mapped[Decimal] = mapped_column(
+        DECIMAL(20, 8), nullable=False, default=Decimal("0")
     )
-    stop_loss = Column(Numeric(precision=20, scale=8), nullable=True)
-    take_profit = Column(Numeric(precision=20, scale=8), nullable=True)
-    strategy_id = Column(Integer, ForeignKey("strategies.id"), nullable=True)
-    opened_at = Column(
+    realized_pnl: Mapped[Decimal] = mapped_column(
+        DECIMAL(20, 8), nullable=False, default=Decimal("0")
+    )
+    is_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    opened_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    closed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+        onupdate=lambda: datetime.now(timezone.utc),
     )
-    closed_at = Column(DateTime(timezone=True), nullable=True)
-    is_open = Column(Boolean, default=True, nullable=False, index=True)
 
     # Relationships
-    orders = relationship("Order", back_populates="position")
-    trades = relationship("Trade", back_populates="position")
-    strategy = relationship("Strategy", back_populates="positions")
-
-    __table_args__ = (
-        Index("idx_positions_symbol_is_open", "symbol", "is_open"),
-        Index("idx_positions_opened_at", "opened_at"),
+    strategy: Mapped[Optional["Strategy"]] = relationship(
+        "Strategy", back_populates="positions"
     )
 
 
 class Trade(Base):
-    """Trade model for completed trades."""
+    """Trade model for recording executed trades."""
 
     __tablename__ = "trades"
 
-    id = Column(Integer, primary_key=True, index=True)
-    symbol = Column(String(20), nullable=False, index=True)
-    side = Column(Enum(OrderSide), nullable=False)
-    quantity = Column(Numeric(precision=20, scale=8), nullable=False)
-    entry_price = Column(Numeric(precision=20, scale=8), nullable=False)
-    exit_price = Column(Numeric(precision=20, scale=8), nullable=False)
-    pnl = Column(Numeric(precision=20, scale=8), nullable=False)
-    commission = Column(
-        Numeric(precision=20, scale=8),
-        default=Decimal("0"),
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    order_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("orders.id"), nullable=False
     )
-    position_id = Column(Integer, ForeignKey("positions.id"), nullable=True)
-    strategy_id = Column(Integer, ForeignKey("strategies.id"), nullable=True)
-    entry_time = Column(DateTime(timezone=True), nullable=False)
-    exit_time = Column(DateTime(timezone=True), nullable=False)
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    side: Mapped[Side] = mapped_column(Enum(Side), nullable=False)
+    quantity: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    price: Mapped[Decimal] = mapped_column(DECIMAL(20, 8), nullable=False)
+    commission: Mapped[Decimal] = mapped_column(
+        DECIMAL(20, 8), nullable=False, default=Decimal("0")
+    )
+    exchange_trade_id: Mapped[Optional[str]] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    executed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
 
     # Relationships
-    position = relationship("Position", back_populates="trades")
-    strategy = relationship("Strategy", back_populates="trades")
-
-    __table_args__ = (
-        Index("idx_trades_symbol_exit_time", "symbol", "exit_time"),
-        Index("idx_trades_created_at", "created_at"),
-    )
+    order: Mapped["Order"] = relationship("Order", back_populates="trades")
 
 
 class Strategy(Base):
-    """Strategy model for trading strategies."""
+    """Strategy model for tracking trading strategies."""
 
     __tablename__ = "strategies"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(100), nullable=False, unique=True, index=True)
-    description = Column(String(500), nullable=True)
-    parameters = Column(JSON, nullable=True)
-    is_active = Column(Boolean, default=True, nullable=False, index=True)
-    created_at = Column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        nullable=False,
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    parameters: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )  # JSON string
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
     )
-    updated_at = Column(
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
-        nullable=False,
     )
 
     # Relationships
-    orders = relationship("Order", back_populates="strategy")
-    positions = relationship("Position", back_populates="strategy")
-    trades = relationship("Trade", back_populates="strategy")
-
-    __table_args__ = (Index("idx_strategies_is_active", "is_active"),)
+    orders: Mapped[list["Order"]] = relationship("Order", back_populates="strategy")
+    positions: Mapped[list["Position"]] = relationship(
+        "Position", back_populates="strategy"
+    )
