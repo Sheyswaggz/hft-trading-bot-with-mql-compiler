@@ -1,0 +1,57 @@
+# Production Dependencies - Pinned versions for reproducible deployments
+# Generated from pyproject.toml with exact versions to ensure consistency across environments
+
+# Web Framework - FastAPI 0.104.1 provides stable async API with Pydantic v2 support
+fastapi==0.104.1
+
+# ASGI Server - Uvicorn 0.24.0.post1 with standard extras (websockets, httptools, uvloop)
+# Includes performance optimizations for production workloads
+uvicorn[standard]==0.24.0.post1
+
+# Data Validation - Pydantic 2.5.2 for type-safe data models and validation
+# Version 2.x provides significant performance improvements over v1
+pydantic==2.5.2
+
+# Settings Management - Pydantic Settings 2.1.0 for environment-based configuration
+# Integrates with Pydantic v2 for type-safe settings from env vars and .env files
+pydantic-settings==2.1.0
+
+# File Upload Support - Python Multipart 0.0.6 for handling multipart/form-data
+# Required for FastAPI file upload endpoints
+python-multipart==0.0.6
+
+# Redis Client - Redis 5.0.1 for caching and real-time data operations
+# Async support for non-blocking operations in FastAPI
+redis==5.0.1
+
+# PostgreSQL Driver - Psycopg2 Binary 2.9.9 for database connectivity
+# Binary distribution includes compiled C extensions for performance
+psycopg2-binary==2.9.9
+
+# ORM - SQLAlchemy 2.0.23 for database abstraction and query building
+# Version 2.0 provides improved async support and type hints
+sqlalchemy==2.0.23
+
+# Database Migrations - Alembic 1.13.0 for schema version control
+# Integrates with SQLAlchemy for automated migration generation
+alembic==1.13.0
+
+# WebSocket Support - Websockets 12.0 for real-time bidirectional communication
+# Required for live trading data feeds and order updates
+websockets==12.0
+
+# HTTP Client - Aiohttp 3.9.1 for async HTTP requests to external APIs
+# Used for broker API integration and market data fetching
+aiohttp==3.9.1
+
+# Data Analysis - Pandas 2.1.4 for time series analysis and market data processing
+# Essential for backtesting and technical indicator calculations
+pandas==2.1.4
+
+# Numerical Computing - NumPy 1.26.2 for high-performance array operations
+# Dependency for Pandas and used directly for mathematical computations
+numpy==1.26.2
+
+# Environment Variables - Python Dotenv 1.0.0 for loading .env files
+# Manages configuration secrets and environment-specific settings
+python-dotenv==1.0.0
