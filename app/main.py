@@ -1,108 +1,85 @@
-"""Main FastAPI application entry point.
-
-This module initializes the FastAPI application with middleware, routers,
-and lifecycle management for the HFT Trading Bot API.
-"""
+"""Main FastAPI application entry point."""
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import Any
 
-import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import health
-from app.config import get_settings
-from app.core.logging import get_logger, setup_logging
+from app.api.health import router as health_router
+from app.cache.redis_client import close_redis, get_redis, ping_redis
+from app.config import settings
+from app.core.logging import setup_logging
+from app.db.session import engine
+
+# Setup logging
+logger = setup_logging()
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage application lifecycle events.
+async def lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
+    """Application lifespan manager."""
+    logger.info("Starting up HFT Trading Bot API...")
 
-    Handles startup and shutdown tasks including logging configuration
-    and resource cleanup.
+    # Test database connection
+    try:
+        # Use sync context manager (engine.begin() is not async)
+        with engine.begin() as conn:
+            logger.info("Database connection successful")
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        raise
 
-    Args:
-        app: FastAPI application instance
-
-    Yields:
-        None: Control to the application during its lifetime
-    """
-    settings = get_settings()
-
-    # Startup: Configure logging infrastructure
-    setup_logging(log_level=settings.LOG_LEVEL)
-    logger = get_logger(__name__)
-
-    logger.info(
-        "Application starting",
-        extra={
-            "app_name": settings.APP_NAME,
-            "version": settings.VERSION,
-            "debug": settings.DEBUG,
-            "log_level": settings.LOG_LEVEL,
-        },
-    )
+    # Initialize Redis connection
+    try:
+        redis_client = await get_redis()
+        await ping_redis()
+        logger.info("Redis connected")
+    except Exception as e:
+        logger.error(f"Redis connection failed: {e}")
+        raise
 
     yield
 
-    # Shutdown: Log graceful shutdown
-    logger.info(
-        "Application shutting down",
-        extra={
-            "app_name": settings.APP_NAME,
-            "version": settings.VERSION,
-        },
-    )
+    # Cleanup
+    logger.info("Shutting down HFT Trading Bot API...")
+    
+    # Close Redis connections
+    await close_redis()
+    logger.info("Redis connections closed")
+    
+    # dispose() returns None, don't try to await it
+    engine.dispose()
+    logger.info("Database connections closed")
 
 
-# Initialize FastAPI application
-settings = get_settings()
-
+# Create FastAPI application
 app = FastAPI(
-    title=settings.APP_NAME,
+    title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="High-Frequency Trading Bot with MQL Compiler",
-    docs_url="/docs",
-    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-# Configure CORS middleware for frontend access
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Include routers
-app.include_router(health.router)
+app.include_router(health_router, prefix="/api/v1", tags=["health"])
 
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    """Root endpoint providing API information.
-
-    Returns basic information about the API including version and
-    documentation links.
-
-    Returns:
-        dict: API metadata with name, version, and documentation URL
-    """
+@app.get("/", tags=["root"])
+async def root() -> dict[str, Any]:
+    """Root endpoint."""
     return {
         "message": "HFT Trading Bot API",
         "version": settings.VERSION,
         "docs": "/docs",
+        "health": "/api/v1/health",
     }
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-    )
