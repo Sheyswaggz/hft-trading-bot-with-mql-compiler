@@ -1,135 +1,48 @@
-"""Health check endpoints for liveness and readiness probes.
-
-This module provides health monitoring endpoints for Kubernetes and load balancers
-to determine application health and readiness to serve traffic.
-"""
+"""Health check endpoints."""
 
 import logging
-from datetime import datetime, timezone
+from typing import Dict
 
-import redis
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(tags=["health"])
+router = APIRouter()
 
 
-@router.get("/health", status_code=status.HTTP_200_OK)
-async def health_check() -> dict[str, str]:
-    """Liveness probe endpoint.
-
-    Returns basic health status indicating the application is running.
-    This endpoint should always return 200 OK unless the application is crashed.
+@router.get("/health")
+async def health_check() -> Dict[str, str]:
+    """Basic health check endpoint.
 
     Returns:
-        dict: Health status with timestamp
-
-    Example:
-        >>> response = await health_check()
-        >>> response["status"]
-        'healthy'
+        Health status
     """
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+    return {"status": "healthy"}
 
 
-@router.get("/ready", status_code=status.HTTP_200_OK)
-async def readiness_check(
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, dict[str, str] | str]:
-    """Readiness probe endpoint.
-
-    Validates connectivity to critical dependencies (Redis and PostgreSQL).
-    Returns 200 OK only when all services are accessible and operational.
+@router.get("/health/db")
+async def database_health_check(db: Session = Depends(get_db)) -> Dict[str, str]:
+    """Database health check endpoint.
 
     Args:
-        db: Database session from dependency injection
+        db: Database session
 
     Returns:
-        dict: Readiness status with service health details
+        Database health status
 
     Raises:
-        HTTPException: 503 Service Unavailable if any dependency is unreachable
-
-    Example:
-        >>> response = await readiness_check()
-        >>> response["services"]["redis"]
-        'ok'
+        HTTPException: If database is unhealthy
     """
-    settings = get_settings()
-    services: dict[str, str] = {}
-    errors: list[str] = []
-
-    # Check Redis connectivity
     try:
-        redis_client = redis.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-        )
-        redis_client.ping()
-        services["redis"] = "ok"
-        logger.debug("Redis health check passed")
-    except redis.RedisError as e:
-        services["redis"] = "unavailable"
-        error_msg = f"Redis connection failed: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
+        # Execute a simple query to check database connectivity
+        db.execute(text("SELECT 1"))
+        return {"status": "healthy", "database": "connected"}
     except Exception as e:
-        services["redis"] = "error"
-        error_msg = f"Redis health check error: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
-    finally:
-        try:
-            redis_client.close()
-        except Exception:
-            pass
-
-    # Check PostgreSQL connectivity
-    try:
-        result = await db.execute(select(1))
-        row = result.scalar_one()
-
-        if row == 1:
-            services["database"] = "ok"
-            logger.debug("Database health check passed")
-        else:
-            services["database"] = "error"
-            error_msg = "Database query returned unexpected result"
-            errors.append(error_msg)
-            logger.error(error_msg)
-    except Exception as e:
-        services["database"] = "unavailable"
-        error_msg = f"Database connection failed: {e!s}"
-        errors.append(error_msg)
-        logger.error(error_msg, exc_info=True)
-
-    # Return 503 if any service is unhealthy
-    if errors:
-        logger.warning(
-            "Readiness check failed",
-            extra={"services": services, "errors": errors},
-        )
+        logger.error(f"Database health check failed: {e}")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "status": "not_ready",
-                "services": services,
-                "errors": errors,
-            },
-        )
-
-    return {
-        "status": "ready",
-        "services": services,
-    }
+            status_code=503, detail="Database connection failed"
+        ) from e
